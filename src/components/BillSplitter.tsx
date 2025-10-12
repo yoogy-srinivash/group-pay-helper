@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Users, Plus, Trash2, Calculator } from "lucide-react";
+import { Users, Plus, Trash2, Calculator, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 interface Person {
@@ -100,22 +100,42 @@ export function BillSplitter() {
   };
 
   const getSettlement = () => {
-    const debtors: { person: Person; owes: number }[] = [];
-    const creditors: { person: Person; gets: number }[] = [];
+    const balances = people.map(person => ({
+      person,
+      balance: person.paid - person.shouldPay
+    }));
 
-    people.forEach(person => {
-      const balance = person.paid - person.shouldPay;
-      if (balance < -0.01) {
-        debtors.push({ person, owes: Math.abs(balance) });
-      } else if (balance > 0.01) {
-        creditors.push({ person, gets: balance });
-      }
-    });
+    const debtors = balances.filter(b => b.balance < -0.01).map(b => ({ ...b.person, owes: Math.abs(b.balance) }));
+    const creditors = balances.filter(b => b.balance > 0.01).map(b => ({ ...b.person, gets: b.balance }));
 
-    return { debtors, creditors };
+    // Calculate optimal transactions (minimize number of payments)
+    const transactions: { from: string; to: string; amount: number }[] = [];
+    const debtorsCopy = [...debtors];
+    const creditorsCopy = [...creditors];
+
+    while (debtorsCopy.length > 0 && creditorsCopy.length > 0) {
+      const debtor = debtorsCopy[0];
+      const creditor = creditorsCopy[0];
+
+      const amount = Math.min(debtor.owes, creditor.gets);
+
+      transactions.push({
+        from: debtor.name,
+        to: creditor.name,
+        amount: amount
+      });
+
+      debtor.owes -= amount;
+      creditor.gets -= amount;
+
+      if (debtor.owes < 0.01) debtorsCopy.shift();
+      if (creditor.gets < 0.01) creditorsCopy.shift();
+    }
+
+    return { transactions, debtors, creditors };
   };
 
-  const { debtors, creditors } = showResults ? getSettlement() : { debtors: [], creditors: [] };
+  const { transactions: settlements, debtors, creditors } = showResults ? getSettlement() : { transactions: [], debtors: [], creditors: [] };
 
   return (
     <Card className="p-6 bg-card border-border">
@@ -250,33 +270,99 @@ export function BillSplitter() {
 
             {/* Results */}
             {showResults && (
-              <div className="space-y-4 p-4 bg-secondary rounded-lg">
-                <h3 className="font-bold text-foreground text-lg">Settlement Details</h3>
-                
-                {creditors.length > 0 && (
-                  <div>
-                    <p className="text-sm text-success font-semibold mb-2">Should Receive:</p>
-                    {creditors.map(({ person, gets }) => (
-                      <p key={person.id} className="text-foreground ml-4">
-                        {person.name} should receive <span className="font-bold text-success">${gets.toFixed(2)}</span>
-                      </p>
-                    ))}
+              <div className="space-y-6">
+                {/* Payment Flow Visualization */}
+                {settlements.length > 0 && (
+                  <div className="p-6 bg-secondary rounded-lg space-y-4">
+                    <h3 className="font-bold text-foreground text-xl flex items-center gap-2">
+                      <Calculator className="w-5 h-5 text-primary" />
+                      Payment Flow
+                    </h3>
+                    <p className="text-sm text-muted-foreground">Optimized settlements - minimum transactions needed</p>
+                    
+                    <div className="space-y-4 mt-4">
+                      {settlements.map((settlement, index) => (
+                        <div 
+                          key={index} 
+                          className="flex items-center gap-4 p-4 bg-background rounded-lg border-2 border-primary/20 hover:border-primary/40 transition-all animate-fade-in"
+                          style={{ animationDelay: `${index * 100}ms` }}
+                        >
+                          {/* From Person */}
+                          <div className="flex-1 text-right">
+                            <div className="inline-block px-4 py-2 bg-destructive/20 rounded-lg border border-destructive/30">
+                              <p className="font-bold text-foreground">{settlement.from}</p>
+                              <p className="text-xs text-muted-foreground">Payer</p>
+                            </div>
+                          </div>
+
+                          {/* Arrow with Amount */}
+                          <div className="flex flex-col items-center gap-1 px-4">
+                            <ArrowRight className="w-8 h-8 text-primary animate-pulse" strokeWidth={3} />
+                            <div className="px-3 py-1 bg-primary rounded-full">
+                              <p className="font-bold text-primary-foreground text-lg">
+                                ${settlement.amount.toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* To Person */}
+                          <div className="flex-1 text-left">
+                            <div className="inline-block px-4 py-2 bg-success/20 rounded-lg border border-success/30">
+                              <p className="font-bold text-foreground">{settlement.to}</p>
+                              <p className="text-xs text-muted-foreground">Receiver</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                {debtors.length > 0 && (
-                  <div>
-                    <p className="text-sm text-destructive font-semibold mb-2">Needs to Pay:</p>
-                    {debtors.map(({ person, owes }) => (
-                      <p key={person.id} className="text-foreground ml-4">
-                        {person.name} needs to pay <span className="font-bold text-destructive">${owes.toFixed(2)}</span>
-                      </p>
-                    ))}
-                  </div>
-                )}
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* People Who Paid More */}
+                  {creditors.length > 0 && (
+                    <Card className="p-4 bg-success/10 border-success/30">
+                      <h4 className="font-semibold text-success mb-3 flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-success"></div>
+                        Will Receive Money
+                      </h4>
+                      <div className="space-y-2">
+                        {creditors.map((creditor) => (
+                          <div key={creditor.id} className="flex justify-between items-center p-2 bg-background/50 rounded">
+                            <span className="font-medium text-foreground">{creditor.name}</span>
+                            <span className="font-bold text-success">+${creditor.gets.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  )}
 
-                {creditors.length === 0 && debtors.length === 0 && (
-                  <p className="text-muted-foreground text-center">Everyone is settled up! 🎉</p>
+                  {/* People Who Need to Pay */}
+                  {debtors.length > 0 && (
+                    <Card className="p-4 bg-destructive/10 border-destructive/30">
+                      <h4 className="font-semibold text-destructive mb-3 flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-destructive"></div>
+                        Needs to Pay
+                      </h4>
+                      <div className="space-y-2">
+                        {debtors.map((debtor) => (
+                          <div key={debtor.id} className="flex justify-between items-center p-2 bg-background/50 rounded">
+                            <span className="font-medium text-foreground">{debtor.name}</span>
+                            <span className="font-bold text-destructive">-${debtor.owes.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  )}
+                </div>
+
+                {/* Everyone Settled Message */}
+                {settlements.length === 0 && (
+                  <div className="p-8 bg-success/10 rounded-lg text-center border-2 border-success/30">
+                    <p className="text-2xl font-bold text-success mb-2">🎉 All Settled!</p>
+                    <p className="text-muted-foreground">Everyone has paid their fair share</p>
+                  </div>
                 )}
               </div>
             )}
