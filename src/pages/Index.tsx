@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
-import { Wallet, TrendingUp, Receipt, PieChart } from "lucide-react";
+import { Wallet, TrendingUp, Receipt, PieChart, Edit2 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { AddExpenseForm } from "@/components/AddExpenseForm";
 import { TransactionList } from "@/components/TransactionList";
 import { BillSplitter } from "@/components/BillSplitter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 interface Transaction {
@@ -22,9 +25,21 @@ const Index = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [initialBalance, setInitialBalance] = useState<number>(() => {
+    const saved = localStorage.getItem('initialBalance');
+    return saved ? parseFloat(saved) : 0;
+  });
+
+  const [balanceInput, setBalanceInput] = useState<string>("");
+  const [isBalanceDialogOpen, setIsBalanceDialogOpen] = useState(false);
+
   useEffect(() => {
     localStorage.setItem('expenses', JSON.stringify(transactions));
   }, [transactions]);
+
+  useEffect(() => {
+    localStorage.setItem('initialBalance', initialBalance.toString());
+  }, [initialBalance]);
 
   const addExpense = (expense: Transaction) => {
     setTransactions([expense, ...transactions]);
@@ -35,13 +50,30 @@ const Index = () => {
     toast.success("Expense deleted");
   };
 
-  const totalBalance = 5240.00; // Mock data
+  const handleSetBalance = () => {
+    const amount = parseFloat(balanceInput);
+    if (isNaN(amount) || amount < 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+    setInitialBalance(amount);
+    setBalanceInput("");
+    setIsBalanceDialogOpen(false);
+    toast.success("Balance updated!");
+  };
+
   const monthlyExpenses = transactions.reduce((sum, t) => sum + t.amount, 0);
+  const currentBalance = initialBalance - monthlyExpenses;
   const transactionCount = transactions.length;
   
-  const budgetLimit = 3500;
-  const budgetPercentage = Math.min(Math.round((monthlyExpenses / budgetLimit) * 100), 100);
-  const budgetRemaining = Math.max(budgetLimit - monthlyExpenses, 0);
+  // Category breakdown
+  const categoryExpenses = transactions.reduce((acc, t) => {
+    acc[t.category] = (acc[t.category] || 0) + t.amount;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const topCategory = Object.entries(categoryExpenses).sort(([, a], [, b]) => b - a)[0];
+  const categoryCount = Object.keys(categoryExpenses).length;
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -59,31 +91,67 @@ const Index = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            icon={Wallet}
-            title="Total Balance"
-            value={`$${totalBalance.toFixed(2)}`}
-            subtitle="+12.5% from last month"
-            trend="up"
-          />
+          <div className="relative">
+            <StatCard
+              icon={Wallet}
+              title="Total Balance"
+              value={`$${currentBalance.toFixed(2)}`}
+              subtitle={initialBalance === 0 ? "Click to set initial balance" : `From $${initialBalance.toFixed(2)} initial`}
+              trend={currentBalance >= 0 ? "up" : "down"}
+            />
+            <Dialog open={isBalanceDialogOpen} onOpenChange={setIsBalanceDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="absolute top-2 right-2 w-8 h-8 hover:bg-primary/10"
+                >
+                  <Edit2 className="w-4 h-4 text-primary" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-card border-border">
+                <DialogHeader>
+                  <DialogTitle className="text-foreground">Set Initial Balance</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <div>
+                    <label className="text-sm text-muted-foreground mb-2 block">
+                      Enter your starting balance
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={balanceInput}
+                      onChange={(e) => setBalanceInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSetBalance()}
+                      className="bg-input border-border text-foreground"
+                    />
+                  </div>
+                  <Button onClick={handleSetBalance} className="w-full bg-primary hover:bg-primary/90">
+                    Set Balance
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
           <StatCard
             icon={TrendingUp}
             title="Monthly Expenses"
             value={`$${monthlyExpenses.toFixed(2)}`}
-            subtitle="-8.3% from last month"
-            trend="down"
+            subtitle={`${transactionCount} transaction${transactionCount !== 1 ? 's' : ''}`}
           />
           <StatCard
             icon={Receipt}
             title="Transactions"
             value={transactionCount.toString()}
-            subtitle="15 this week"
+            subtitle={categoryCount > 0 ? `Across ${categoryCount} categories` : "No expenses yet"}
           />
           <StatCard
             icon={PieChart}
-            title="Budget Status"
-            value={`${budgetPercentage}%`}
-            subtitle={`$${budgetRemaining.toFixed(2)} remaining`}
+            title="Category Report"
+            value={topCategory ? topCategory[0] : "—"}
+            subtitle={topCategory ? `$${topCategory[1].toFixed(2)} spent` : "Add expenses to see report"}
           />
         </div>
 
