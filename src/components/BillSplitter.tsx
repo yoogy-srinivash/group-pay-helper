@@ -318,44 +318,6 @@ export function BillSplitter() {
                   </div>
                 )}
 
-                {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* People Who Paid More */}
-                  {creditors.length > 0 && (
-                    <Card className="p-4 bg-success/10 border-success/30">
-                      <h4 className="font-semibold text-success mb-3 flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-success"></div>
-                        Will Receive Money
-                      </h4>
-                      <div className="space-y-2">
-                        {creditors.map((creditor) => (
-                          <div key={creditor.id} className="flex justify-between items-center p-2 bg-background/50 rounded">
-                            <span className="font-medium text-foreground">{creditor.name}</span>
-                            <span className="font-bold text-success">+${creditor.gets.toFixed(2)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
-                  )}
-
-                  {/* People Who Need to Pay */}
-                  {debtors.length > 0 && (
-                    <Card className="p-4 bg-destructive/10 border-destructive/30">
-                      <h4 className="font-semibold text-destructive mb-3 flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-destructive"></div>
-                        Needs to Pay
-                      </h4>
-                      <div className="space-y-2">
-                        {debtors.map((debtor) => (
-                          <div key={debtor.id} className="flex justify-between items-center p-2 bg-background/50 rounded">
-                            <span className="font-medium text-foreground">{debtor.name}</span>
-                            <span className="font-bold text-destructive">-${debtor.owes.toFixed(2)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
-                  )}
-                </div>
 
                 {/* Everyone Settled Message */}
                 {settlements.length === 0 && (
